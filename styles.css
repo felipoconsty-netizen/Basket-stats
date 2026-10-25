@@ -1,0 +1,177 @@
+:root {
+  --fondo: #f5f3ef;
+  --tarjeta: #ffffff;
+  --texto: #1d1d1f;
+  --suave: #6b6b70;
+  --borde: #e2ded7;
+  --naranja: #e8590c;
+  --naranja-suave: #fff1e8;
+  --nuestro: #e8590c;
+  --rival: #3b6fb6;
+  --ok: #2b8a3e;
+  --mal: #c92a2a;
+  --duda: #e0a100;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #141416;
+    --tarjeta: #1f1f23;
+    --texto: #ececef;
+    --suave: #a0a0a8;
+    --borde: #34343a;
+    --naranja-suave: #3a2416;
+    --rival: #6c9bdc;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--fondo);
+  color: var(--texto);
+}
+a { color: var(--naranja); }
+
+.cabecera {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--tarjeta);
+  border-bottom: 1px solid var(--borde);
+  padding: 10px 16px 0;
+}
+.cabecera h1 { font-size: 1.2rem; margin: 0 0 8px; }
+.pestanas { display: flex; gap: 4px; overflow-x: auto; }
+.pestanas button {
+  border: 0; background: none; color: var(--suave);
+  padding: 8px 12px; font: inherit; font-size: .95rem; cursor: pointer;
+  border-bottom: 3px solid transparent; white-space: nowrap;
+}
+.pestanas button.activa { color: var(--texto); border-bottom-color: var(--naranja); font-weight: 600; }
+.pestanas .ajustes-btn { margin-left: auto; }
+
+main { max-width: 1000px; margin: 0 auto; padding: 16px; }
+.vista { display: none; }
+.vista.activa { display: block; }
+
+.tarjeta {
+  background: var(--tarjeta);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+.tarjeta h2 { font-size: 1.1rem; margin: 0 0 10px; }
+.tarjeta h3 { font-size: 1rem; margin: 18px 0 8px; }
+#aviso-clave { border-color: var(--naranja); background: var(--naranja-suave); }
+
+label { display: block; margin: 10px 0; font-weight: 500; }
+input, select, textarea {
+  display: block; width: 100%; margin-top: 4px;
+  font: inherit; font-weight: 400; color: inherit;
+  background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px;
+  padding: 8px 10px;
+}
+textarea { resize: vertical; }
+fieldset { border: 1px solid var(--borde); border-radius: 10px; padding: 4px 12px 8px; margin: 0; }
+legend { font-weight: 600; padding: 0 4px; }
+.dos-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.opcional, .ayuda { color: var(--suave); font-weight: 400; font-size: .9rem; }
+.check { display: flex; align-items: center; gap: 6px; margin: 0; }
+.check input { width: auto; margin: 0; }
+
+button, .boton-archivo {
+  font: inherit; cursor: pointer; border-radius: 8px; padding: 10px 16px;
+  border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto);
+}
+button.principal { background: var(--naranja); border-color: var(--naranja); color: #fff; font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+.boton-archivo { display: inline-block; margin: 0; font-weight: 400; }
+.boton-archivo input { display: none; }
+.acciones { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+
+.soltar {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  min-height: 90px; border: 2px dashed var(--borde); border-radius: 10px;
+  cursor: pointer; color: var(--suave); padding: 12px; margin: 0;
+}
+.soltar input { display: none; }
+.soltar.con-video { border-style: solid; border-color: var(--ok); color: var(--texto); }
+video { width: 100%; max-height: 420px; background: #000; border-radius: 10px; margin-top: 12px; }
+
+.barra { height: 10px; background: var(--fondo); border-radius: 5px; overflow: hidden; margin: 10px 0; }
+#barra-progreso { height: 100%; width: 0; background: var(--naranja); transition: width .3s; }
+.tramos { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.tramos li { font-size: .85rem; padding: 6px 8px; border-radius: 6px; background: var(--fondo); }
+.tramos li.hecho { background: color-mix(in srgb, var(--ok) 18%, transparent); }
+.tramos li.analizando { background: var(--naranja-suave); font-weight: 600; }
+.tramos li.error { background: color-mix(in srgb, var(--mal) 18%, transparent); }
+.pasos li { margin-bottom: 4px; }
+
+.filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+.filtros select { width: auto; margin: 0; }
+.tabla-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--borde); text-align: left; }
+th { font-size: .8rem; color: var(--suave); font-weight: 600; white-space: nowrap; }
+table.eventos input, table.eventos select { margin: 0; padding: 4px 6px; font-size: .9rem; }
+table.eventos td.dorsal input { width: 56px; }
+table.eventos tr.baja { background: color-mix(in srgb, var(--duda) 14%, transparent); }
+table.eventos tr.media td:first-child { box-shadow: inset 3px 0 var(--duda); }
+.tiempo { font-variant-numeric: tabular-nums; color: var(--naranja); background: none; border: 0; padding: 2px 4px; text-decoration: underline; }
+.borrar { border: 0; background: none; color: var(--suave); padding: 4px 8px; }
+
+/* Informe */
+.marcador { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; text-align: center; }
+.marcador .equipo { font-weight: 600; }
+.marcador .puntos { font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.marcador .nuestro .puntos { color: var(--nuestro); }
+.marcador .rival .puntos { color: var(--rival); }
+.marcador .guion { font-size: 2rem; color: var(--suave); }
+.aviso-demo { background: var(--naranja-suave); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+
+.comparativa td.barra-celda { width: 40%; }
+.comparativa .num { text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; width: 15%; }
+.duelo { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--fondo); }
+.duelo .n { background: var(--nuestro); }
+.duelo .r { background: var(--rival); }
+.comparativa .nombre-stat { text-align: center; color: var(--suave); font-size: .85rem; }
+
+table.box td, table.box th { text-align: center; font-variant-numeric: tabular-nums; }
+table.box td:first-child, table.box th:first-child { text-align: left; white-space: nowrap; }
+table.box tr.total td { font-weight: 700; border-top: 2px solid var(--borde); }
+table.box th abbr { text-decoration: none; cursor: help; }
+
+.glosario { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 18px; font-size: .9rem; margin: 0; }
+.glosario dt { font-weight: 700; }
+.glosario dd { margin: 0 0 6px; color: var(--suave); }
+.listas { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.listas ul { padding-left: 20px; margin: 0; }
+.momentos { list-style: none; padding: 0; margin: 0; }
+.momentos li { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--borde); }
+.grafico svg { width: 100%; height: auto; }
+.leyenda { display: flex; gap: 16px; font-size: .85rem; color: var(--suave); }
+.leyenda span::before { content: ""; display: inline-block; width: 12px; height: 3px; margin-right: 6px; vertical-align: middle; background: currentColor; }
+.leyenda .n { color: var(--nuestro); }
+.leyenda .r { color: var(--rival); }
+
+.toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+  background: var(--texto); color: var(--fondo); padding: 10px 16px; border-radius: 8px;
+  max-width: calc(100% - 32px); z-index: 10;
+}
+.toast.error { background: var(--mal); color: #fff; }
+
+@media (max-width: 640px) {
+  .dos-col, .listas { grid-template-columns: 1fr; }
+  .marcador .puntos { font-size: 2rem; }
+}
+
+@media print {
+  .cabecera, .no-imprimir, .toast { display: none !important; }
+  body { background: #fff; color: #000; }
+  main { padding: 0; max-width: none; }
+  .tarjeta { border: 0; padding: 0; margin-bottom: 18px; break-inside: avoid; }
+  .vista { display: none !important; }
+  #vista-informe { display: block !important; }
+}

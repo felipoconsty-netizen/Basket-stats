@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Estadísticas de Básquet</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏀</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="cabecera">
+    <h1>🏀 Estadísticas de Básquet</h1>
+    <nav class="pestanas" role="tablist">
+      <button data-vista="partido" class="activa">1. Partido</button>
+      <button data-vista="analizar">2. Analizar</button>
+      <button data-vista="revisar">3. Revisar jugadas</button>
+      <button data-vista="informe">4. Informe</button>
+      <button data-vista="ajustes" class="ajustes-btn">⚙️ Ajustes</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- 1. PARTIDO -->
+    <section id="vista-partido" class="vista activa">
+      <div class="tarjeta" id="aviso-clave" hidden>
+        <strong>Primero, la clave de Gemini.</strong> La app usa la inteligencia artificial de Google para ver el vídeo.
+        Ve a <a href="#" data-ir="ajustes">Ajustes</a> y pega tu clave (es gratis, te explicamos cómo).
+      </div>
+
+      <div class="tarjeta">
+        <h2>Vídeo del partido</h2>
+        <label class="soltar" id="zona-video">
+          <input type="file" id="archivo-video" accept="video/*">
+          <span id="texto-video">Toca aquí para elegir el vídeo (MP4, MOV...)</span>
+        </label>
+        <video id="previa" controls playsinline hidden></video>
+      </div>
+
+      <div class="tarjeta">
+        <h2>Equipos</h2>
+        <p class="ayuda">El color de la camiseta es lo que usa la IA para saber quién es quién. Sé concreto: "blanca con números rojos".</p>
+        <div class="dos-col">
+          <fieldset>
+            <legend>Mi equipo</legend>
+            <label>Nombre <input id="nuestro-nombre" placeholder="Ej: CB Sant Joan"></label>
+            <label>Color de camiseta <input id="nuestro-color" placeholder="Ej: blanca con números rojos"></label>
+          </fieldset>
+          <fieldset>
+            <legend>Rival</legend>
+            <label>Nombre <input id="rival-nombre" placeholder="Ej: CB Rival"></label>
+            <label>Color de camiseta <input id="rival-color" placeholder="Ej: azul oscuro"></label>
+          </fieldset>
+        </div>
+        <label>Jugadores de mi equipo <span class="opcional">(opcional, uno por línea: dorsal - nombre)</span>
+          <textarea id="plantilla" rows="5" placeholder="4 - Marc&#10;7 - Pol&#10;10 - Jan"></textarea>
+        </label>
+        <label>Notas para la IA <span class="opcional">(opcional)</span>
+          <textarea id="notas" rows="2" placeholder="Ej: el vídeo empieza en el calentamiento, el partido empieza en el minuto 5"></textarea>
+        </label>
+        <label>Fecha <input type="date" id="fecha"></label>
+      </div>
+
+      <div class="acciones">
+        <button class="principal" id="btn-analizar">Analizar partido ▶</button>
+        <button id="btn-demo" class="secundario">Ver un informe de ejemplo</button>
+        <label class="secundario boton-archivo">Abrir partido guardado <input type="file" id="abrir-json" accept=".json,application/json"></label>
+      </div>
+    </section>
+
+    <!-- 2. ANALIZAR -->
+    <section id="vista-analizar" class="vista">
+      <div class="tarjeta">
+        <h2>Análisis</h2>
+        <p id="estado-analisis" class="ayuda">Todavía no has empezado ningún análisis. Ve a <a href="#" data-ir="partido">Partido</a>.</p>
+        <div class="barra"><div id="barra-progreso"></div></div>
+        <ol id="lista-tramos" class="tramos"></ol>
+        <div class="acciones">
+          <button id="btn-continuar" class="principal" hidden>Reintentar / continuar</button>
+          <button id="btn-cancelar" class="secundario" hidden>Pausar</button>
+        </div>
+        <p class="ayuda">Puedes dejar esta pestaña abierta y hacer otras cosas. Si se cierra, al volver podrás continuar donde lo dejaste (eligiendo otra vez el mismo vídeo).</p>
+      </div>
+    </section>
+
+    <!-- 3. REVISAR -->
+    <section id="vista-revisar" class="vista">
+      <div class="tarjeta">
+        <h2>Revisar jugadas</h2>
+        <p class="ayuda">Aquí están todas las jugadas que ha detectado la IA. Toca el tiempo para ver la jugada en el vídeo, y corrige lo que esté mal. El informe se actualiza solo.</p>
+        <video id="reproductor" controls playsinline hidden></video>
+        <p id="sin-video" class="ayuda" hidden>Para ver las jugadas, elige el vídeo en la pestaña <a href="#" data-ir="partido">Partido</a>.</p>
+        <div class="filtros">
+          <select id="filtro-equipo">
+            <option value="">Los dos equipos</option>
+            <option value="nuestro">Mi equipo</option>
+            <option value="rival">Rival</option>
+          </select>
+          <select id="filtro-tipo"><option value="">Todas las jugadas</option></select>
+          <label class="check"><input type="checkbox" id="filtro-dudosas"> Solo dudosas</label>
+          <button id="btn-anadir" class="secundario">+ Añadir jugada</button>
+        </div>
+        <div class="tabla-scroll">
+          <table class="eventos">
+            <thead><tr><th>Tiempo</th><th>Equipo</th><th>Dorsal</th><th>Jugada</th><th>Descripción</th><th></th></tr></thead>
+            <tbody id="cuerpo-eventos"></tbody>
+          </table>
+        </div>
+        <p id="contador-eventos" class="ayuda"></p>
+      </div>
+    </section>
+
+    <!-- 4. INFORME -->
+    <section id="vista-informe" class="vista">
+      <div id="informe"><div class="tarjeta"><p class="ayuda">Aún no hay informe. Analiza un partido o mira el <a href="#" id="demo-informe">ejemplo</a>.</p></div></div>
+    </section>
+
+    <!-- AJUSTES -->
+    <section id="vista-ajustes" class="vista">
+      <div class="tarjeta">
+        <h2>Clave de Gemini (Google)</h2>
+        <ol class="pasos">
+          <li>Entra en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> con tu cuenta de Google.</li>
+          <li>Pulsa <b>"Create API key"</b> (Crear clave) y cópiala.</li>
+          <li>Pégala aquí abajo y pulsa <b>Guardar</b>.</li>
+        </ol>
+        <label>Clave <input id="clave" type="password" autocomplete="off" placeholder="AIza..."></label>
+        <div class="acciones">
+          <button id="btn-guardar-clave" class="principal">Guardar y comprobar</button>
+          <span id="estado-clave" class="ayuda"></span>
+        </div>
+        <p class="ayuda">La clave solo se guarda en este navegador. El vídeo se envía directamente a Google para analizarlo; no pasa por ningún otro sitio. Con la clave gratuita, Google puede usar lo que envías para mejorar sus modelos: si te preocupa (por ejemplo, con menores), activa la facturación en Google AI Studio.</p>
+      </div>
+      <div class="tarjeta">
+        <h2>Opciones del análisis</h2>
+        <label>Modelo de IA <select id="modelo"></select></label>
+        <label>Duración de cada tramo
+          <select id="minutos-tramo">
+            <option value="3">3 minutos (más preciso, más lento)</option>
+            <option value="5">5 minutos (recomendado)</option>
+            <option value="10">10 minutos (más rápido)</option>
+          </select>
+        </label>
+        <label>Fotogramas por segundo
+          <select id="fps">
+            <option value="1">1 por segundo (normal)</option>
+            <option value="2">2 por segundo (ve mejor las jugadas rápidas, gasta el doble)</option>
+          </select>
+        </label>
+        <label>Calidad de imagen
+          <select id="resolucion">
+            <option value="">Alta (lee mejor los dorsales)</option>
+            <option value="MEDIA_RESOLUTION_LOW">Baja (más rápido y barato)</option>
+          </select>
+        </label>
+      </div>
+    </section>
+  </main>
+
+  <div id="aviso" class="toast" hidden></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
