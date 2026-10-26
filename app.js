@@ -17,9 +17,22 @@ const ajustes = Object.assign(
   { clave: '', modelo: 'gemini-3.8-flash', minutosTramo: 5, fps: 1, resolucion: '' },
   cargar('basket-ajustes', {}),
 );
-let analisis = cargar('basket-analisis', null);
-let videoLocal = null; // el archivo de vídeo elegido (no se puede guardar en el navegador)
-let urlVideo = null;
+// Los análisis antiguos tenían un solo vídeo: los pasamos al formato con varias partes.
+function adaptar(a) {
+  if (a && !a.videos && a.video) {
+    a.videos = [{ ...a.video, duracion: a.duracion, offset: 0, archivo: a.archivo || null }];
+    delete a.video;
+    delete a.archivo;
+  }
+  a?.tramos?.forEach(t => { t.video ??= 0; });
+  return a;
+}
+
+let analisis = adaptar(cargar('basket-analisis', null));
+let videosLocales = []; // los archivos de vídeo elegidos, en orden (no se pueden guardar en el navegador)
+let urlsVideo = [];
+let videoActual = -1; // qué parte está cargada en el reproductor
+const LIMITE_GOOGLE = 2 * 1024 ** 3; // Google no acepta archivos de más de 2 GB
 let parar = false;
 let trabajando = false;
 
@@ -114,40 +127,95 @@ function leerPartido() {
   };
 }
 
-function ponerVideo(archivo) {
-  videoLocal = archivo;
-  if (urlVideo) URL.revokeObjectURL(urlVideo);
-  urlVideo = URL.createObjectURL(archivo);
-  for (const id of ['#previa', '#reproductor']) {
-    const v = $(id);
-    v.src = urlVideo;
-    v.hidden = false;
-  }
+// Si el partido está en varios vídeos, se pueden elegir de golpe o de uno en uno, y se ordenan
+// por el nombre del archivo (parte1, parte2... o la fecha que pone el móvil).
+function ponerVideos(archivos) {
+  videosLocales = [...archivos].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  if (!videosLocales.length) return quitarVideos();
+  urlsVideo.forEach(u => URL.revokeObjectURL(u));
+  urlsVideo = videosLocales.map(f => URL.createObjectURL(f));
+  videoActual = -1;
+  cargarEnReproductor(0);
+  $('#previa').src = urlsVideo[0];
+  $('#previa').hidden = false;
+  $('#reproductor').hidden = false;
   $('#sin-video').hidden = true;
   $('#zona-video').classList.add('con-video');
-  const mb = (archivo.size / 1024 / 1024).toFixed(0);
-  $('#texto-video').textContent = `✅ ${archivo.name} (${mb} MB) — toca para cambiarlo`;
+  const mb = f => (f.size / 1024 / 1024).toFixed(0);
+  $('#texto-video').innerHTML = videosLocales.length === 1
+    ? `✅ ${esc(videosLocales[0].name)} (${mb(videosLocales[0])} MB) — toca para cambiarlo`
+    : `✅ Partido en ${videosLocales.length} partes, en este orden:<br>` +
+      videosLocales.map((f, i) => `${i + 1}. ${esc(f.name)} (${mb(f)} MB)`).join('<br>') +
+      '<br><small>Se ordenan por el nombre del archivo.</small>';
+  if (videosLocales.length === 1) $('#texto-video').innerHTML += '<br><small>Si el partido tiene más partes, toca otra vez para añadirlas.</small>';
+  else $('#texto-video').innerHTML += '<br><small>Toca otra vez para añadir otra parte.</small>';
+  $('#btn-quitar-videos').hidden = false;
 }
-$('#archivo-video').addEventListener('change', e => { if (e.target.files[0]) ponerVideo(e.target.files[0]); });
 
-function duracionVideo() {
-  const v = $('#previa');
-  if (v.readyState >= 1 && isFinite(v.duration)) return Promise.resolve(v.duration);
+function quitarVideos() {
+  videosLocales = [];
+  urlsVideo.forEach(u => URL.revokeObjectURL(u));
+  urlsVideo = [];
+  videoActual = -1;
+  for (const id of ['#previa', '#reproductor']) { $(id).removeAttribute('src'); $(id).hidden = true; }
+  $('#zona-video').classList.remove('con-video');
+  $('#texto-video').innerHTML = 'Toca aquí para elegir el vídeo (MP4, MOV...).<br>Si el partido está en varias partes, añádelas todas (de golpe o de una en una).';
+  $('#btn-quitar-videos').hidden = true;
+}
+
+// Cada vez que se eligen vídeos se añaden a los que ya había (sin repetir el mismo archivo).
+$('#archivo-video').addEventListener('change', e => {
+  const nuevos = [...e.target.files].filter(f => !videosLocales.some(v => v.name === f.name && v.size === f.size));
+  if (nuevos.length) ponerVideos([...videosLocales, ...nuevos]);
+  e.target.value = '';
+});
+$('#btn-quitar-videos').addEventListener('click', quitarVideos);
+
+function cargarEnReproductor(i) {
+  if (i === videoActual || !urlsVideo[i]) return;
+  videoActual = i;
+  $('#reproductor').src = urlsVideo[i];
+}
+
+function duracionDe(url) {
   return new Promise((ok, mal) => {
+    const v = document.createElement('video');
+    v.preload = 'metadata';
     v.addEventListener('loadedmetadata', () => ok(v.duration), { once: true });
-    v.addEventListener('error', () => mal(new Error('El navegador no puede leer este vídeo. Prueba a convertirlo a MP4.')), { once: true });
+    v.addEventListener('error', () => mal(new Error('El navegador no puede leer uno de los vídeos. Prueba a convertirlo a MP4.')), { once: true });
+    v.src = url;
   });
+}
+
+const mismosVideos = () => analisis?.videos?.length === videosLocales.length &&
+  analisis.videos.every((v, i) => v.nombre === videosLocales[i].name && v.tamano === videosLocales[i].size);
+
+// Lleva el reproductor al momento t del partido, cambiando de parte si hace falta.
+function verEnVideo(t) {
+  if (!videosLocales.length) return false;
+  const vids = mismosVideos() ? analisis.videos : [];
+  let i = 0;
+  vids.forEach((v, k) => { if (t >= v.offset) i = k; });
+  cargarEnReproductor(i);
+  const v = $('#reproductor');
+  const ir = () => { v.currentTime = Math.max(0, t - (vids[i]?.offset || 0) - 4); v.play(); };
+  if (v.readyState >= 1) ir(); else v.addEventListener('loadedmetadata', ir, { once: true });
+  return true;
 }
 
 $('#btn-analizar').addEventListener('click', async () => {
   if (trabajando) { irA('analizar'); return; }
   if (!ajustes.clave) { avisar('Primero pon tu clave de Gemini en Ajustes.', true); irA('ajustes'); return; }
-  if (!videoLocal) { avisar('Elige el vídeo del partido.', true); return; }
+  if (!videosLocales.length) { avisar('Elige el vídeo del partido.', true); return; }
+  const grande = videosLocales.find(f => f.size > LIMITE_GOOGLE);
+  if (grande) {
+    avisar(`"${grande.name}" pesa más de 2 GB, el máximo que acepta Google. Usa el partido en varias partes más pequeñas.`, true);
+    return;
+  }
   const partido = leerPartido();
   if (!partido.nuestro.color || !partido.rival.color) { avisar('Indica el color de camiseta de los dos equipos.', true); return; }
 
-  const mismoVideo = analisis && !analisis.demo && analisis.video?.nombre === videoLocal.name && analisis.video?.tamano === videoLocal.size;
-  const pendiente = mismoVideo && analisis.tramos?.some(t => t.estado !== 'hecho');
+  const pendiente = analisis && !analisis.demo && mismosVideos() && analisis.tramos?.some(t => t.estado !== 'hecho');
   if (pendiente && confirm('Ya hay un análisis a medias de este vídeo. ¿Quieres continuarlo? (Cancelar = empezar de cero)')) {
     analisis.partido = partido;
     guardarAnalisis();
@@ -157,14 +225,21 @@ $('#btn-analizar').addEventListener('click', async () => {
   if (analisis && !analisis.demo && analisis.eventos?.length &&
       !confirm('Se va a sustituir el análisis anterior. Si lo quieres conservar, cancela y guárdalo desde el Informe. ¿Seguir?')) return;
 
-  let duracion;
-  try { duracion = await duracionVideo(); } catch (err) { avisar(err.message, true); return; }
+  let duraciones;
+  try { duraciones = await Promise.all(urlsVideo.map(duracionDe)); } catch (err) { avisar(err.message, true); return; }
+  // Cada parte empieza donde acaba la anterior: los tiempos son del partido entero.
+  let offset = 0;
+  const videos = videosLocales.map((f, i) => {
+    const v = { nombre: f.name, tamano: f.size, tipo: f.type || 'video/mp4', duracion: duraciones[i], offset, archivo: null };
+    offset += duraciones[i];
+    return v;
+  });
   analisis = {
     partido,
-    duracion,
-    video: { nombre: videoLocal.name, tamano: videoLocal.size, tipo: videoLocal.type || 'video/mp4' },
-    archivo: null,
-    tramos: crearTramos(duracion, ajustes.minutosTramo),
+    duracion: offset,
+    videos,
+    tramos: videos.flatMap((v, i) => crearTramos(v.duracion, ajustes.minutosTramo)
+      .map(t => ({ ...t, video: i, inicio: t.inicio + v.offset, fin: t.fin + v.offset }))),
     eventos: [],
     momentos: [],
     resumen: null,
@@ -190,7 +265,7 @@ $('#abrir-json').addEventListener('change', async e => {
   try {
     const datos = JSON.parse(await f.text());
     if (!Array.isArray(datos.eventos)) throw new Error();
-    analisis = datos;
+    analisis = adaptar(datos);
     guardarAnalisis();
     avisar('Partido cargado.');
     irA('informe');
@@ -209,26 +284,34 @@ function pintarProgreso(mensaje) {
   $('#lista-tramos').innerHTML = tramos.map(t => {
     const icono = { hecho: '✅', analizando: '⏳', error: '⚠️', pendiente: '·' }[t.estado] || '·';
     const n = t.estado === 'hecho' ? ` · ${t.nEventos ?? 0} jugadas` : '';
-    return `<li class="${t.estado}" title="${esc(t.error || '')}">${icono} ${formatoTiempo(t.inicio)}–${formatoTiempo(t.fin)}${n}</li>`;
+    const parte = analisis.videos?.length > 1 ? `P${t.video + 1} · ` : '';
+    return `<li class="${t.estado}" title="${esc(t.error || '')}">${icono} ${parte}${formatoTiempo(t.inicio)}–${formatoTiempo(t.fin)}${n}</li>`;
   }).join('');
   $('#btn-continuar').hidden = trabajando || !tramos.length || (hechos === tramos.length && analisis.resumen);
   $('#btn-cancelar').hidden = !trabajando;
 }
 
-async function asegurarArchivoEnGoogle() {
-  if (analisis.archivo) {
-    const info = await infoVideo(ajustes.clave, analisis.archivo.name);
+const textoParte = i => analisis.videos.length > 1 ? `parte ${i + 1} de ${analisis.videos.length}` : '';
+
+async function asegurarArchivoEnGoogle(i) {
+  const video = analisis.videos[i];
+  if (video.archivo) {
+    const info = await infoVideo(ajustes.clave, video.archivo.name);
     if (info?.state === 'ACTIVE') return;
-    analisis.archivo = null; // Google borra los vídeos a las 48 horas
+    video.archivo = null; // Google borra los vídeos a las 48 horas
   }
-  if (!videoLocal || videoLocal.name !== analisis.video.nombre || videoLocal.size !== analisis.video.tamano) {
-    throw new Error('Elige otra vez el mismo vídeo en la pestaña Partido para continuar.');
+  const local = videosLocales[i];
+  if (!local || local.name !== video.nombre || local.size !== video.tamano) {
+    throw new Error(analisis.videos.length > 1
+      ? 'Elige otra vez los mismos vídeos en la pestaña Partido para continuar.'
+      : 'Elige otra vez el mismo vídeo en la pestaña Partido para continuar.');
   }
-  pintarProgreso('Subiendo el vídeo a Google... 0%');
-  const archivo = await subirVideo(ajustes.clave, videoLocal, p => pintarProgreso(`Subiendo el vídeo a Google... ${Math.round(p * 100)}%`));
-  pintarProgreso('Google está preparando el vídeo (puede tardar unos minutos)...');
+  const cual = textoParte(i) ? ` (${textoParte(i)})` : '';
+  pintarProgreso(`Subiendo el vídeo${cual} a Google... 0%`);
+  const archivo = await subirVideo(ajustes.clave, local, p => pintarProgreso(`Subiendo el vídeo${cual} a Google... ${Math.round(p * 100)}%`));
+  pintarProgreso(`Google está preparando el vídeo${cual} (puede tardar unos minutos)...`);
   const listo = await esperarVideoListo(ajustes.clave, archivo);
-  analisis.archivo = { name: listo.name, uri: listo.uri, mimeType: listo.mimeType || analisis.video.tipo };
+  video.archivo = { name: listo.name, uri: listo.uri, mimeType: listo.mimeType || video.tipo };
   guardarAnalisis();
 }
 
@@ -239,15 +322,20 @@ async function continuar() {
   pintarProgreso();
   try {
     const tramos = analisis.tramos;
-    if (tramos.some(t => t.estado !== 'hecho')) await asegurarArchivoEnGoogle();
+    const subidos = new Set();
     for (const tramo of tramos) {
       if (tramo.estado === 'hecho') continue;
       if (parar) throw new Error('Análisis en pausa.');
+      if (!subidos.has(tramo.video)) {
+        await asegurarArchivoEnGoogle(tramo.video);
+        subidos.add(tramo.video);
+      }
       tramo.estado = 'analizando';
       const num = tramos.indexOf(tramo) + 1;
       pintarProgreso(`Analizando tramo ${num} de ${tramos.length} (${formatoTiempo(tramo.inicio)}–${formatoTiempo(tramo.fin)})...`);
       try {
-        const r = await analizarTramo(ajustes, analisis.partido, analisis.archivo, tramo);
+        const video = analisis.videos[tramo.video];
+        const r = await analizarTramo(ajustes, analisis.partido, video.archivo, tramo, video.offset, textoParte(tramo.video));
         analisis.eventos = analisis.eventos.filter(e => e.tramo !== tramo.inicio)
           .concat(r.eventos.map(e => ({ ...e, tramo: tramo.inicio })));
         analisis.momentos = analisis.momentos.filter(m => m.tramo !== tramo.inicio)
@@ -299,7 +387,7 @@ function pintarEventos() {
     $('#contador-eventos').textContent = '';
     return;
   }
-  if (!videoLocal) { $('#sin-video').hidden = false; }
+  if (!videosLocales.length) { $('#sin-video').hidden = false; }
   const eq = $('#filtro-equipo').value, tipo = filtroTipo.value, dudosas = $('#filtro-dudosas').checked;
   const lista = analisis.eventos
     .filter(e => (!eq || e.equipo === eq) && (!tipo || e.tipo === tipo) && (!dudosas || e.confianza !== 'alta'))
@@ -334,11 +422,8 @@ $('#cuerpo-eventos').addEventListener('change', e => {
 $('#cuerpo-eventos').addEventListener('click', e => {
   const fila = e.target.closest('tr');
   if (e.target.classList.contains('tiempo')) {
-    const v = $('#reproductor');
-    if (!videoLocal) { avisar('Elige el vídeo en la pestaña Partido para ver la jugada.', true); return; }
-    v.currentTime = Math.max(0, Number(e.target.dataset.t) - 4);
-    v.play();
-    v.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (!verEnVideo(Number(e.target.dataset.t))) { avisar('Elige el vídeo en la pestaña Partido para ver la jugada.', true); return; }
+    $('#reproductor').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
   if (e.target.classList.contains('borrar')) {
     analisis.eventos = analisis.eventos.filter(x => x.id !== fila.dataset.id);
@@ -349,7 +434,8 @@ $('#cuerpo-eventos').addEventListener('click', e => {
 $('#btn-anadir').addEventListener('click', () => {
   if (!analisis) { avisar('Primero analiza un partido.', true); return; }
   const v = $('#reproductor');
-  const sugerido = videoLocal ? formatoTiempo(v.currentTime) : '0:00';
+  const offset = mismosVideos() ? analisis.videos[videoActual]?.offset || 0 : 0;
+  const sugerido = videosLocales.length ? formatoTiempo(offset + v.currentTime) : '0:00';
   const txt = prompt('¿En qué momento del vídeo? (minutos:segundos)', sugerido);
   if (txt == null) return;
   const t = leerTiempo(txt);
@@ -518,11 +604,9 @@ function pintarInforme() {
   $('#btn-json').addEventListener('click', descargarJSON);
   $('#btn-resumen')?.addEventListener('click', rehacerResumen);
   caja.querySelectorAll('.momentos .tiempo').forEach(b => b.addEventListener('click', () => {
-    if (!videoLocal) { avisar('Elige el vídeo en la pestaña Partido para ver este momento.', true); return; }
+    if (!videosLocales.length) { avisar('Elige el vídeo en la pestaña Partido para ver este momento.', true); return; }
     irA('revisar');
-    const v = $('#reproductor');
-    v.currentTime = Math.max(0, Number(b.dataset.t) - 4);
-    v.play();
+    verEnVideo(Number(b.dataset.t));
   }));
 }
 
@@ -556,7 +640,7 @@ function descargarCSV(est, nombres) {
 }
 
 function descargarJSON() {
-  const { archivo, ...datos } = analisis;
+  const datos = { ...analisis, videos: analisis.videos?.map(({ archivo, ...v }) => v) };
   descargar(nombreArchivo('json'), JSON.stringify(datos, null, 1), 'application/json');
   avisar('Partido guardado en tu carpeta de descargas. Puedes abrirlo luego desde "Partido".');
 }
@@ -585,6 +669,6 @@ if (analisis?.tramos?.length && !analisis.demo) {
   analisis.tramos.forEach(t => { if (t.estado === 'analizando') t.estado = 'pendiente'; });
   pintarProgreso(analisis.tramos.every(t => t.estado === 'hecho')
     ? 'Último análisis terminado.'
-    : 'Hay un análisis a medias. Elige el mismo vídeo en Partido y pulsa "Reintentar / continuar".');
+    : 'Hay un análisis a medias. Elige los mismos vídeos en Partido y pulsa "Reintentar / continuar".');
 }
 window.addEventListener('beforeunload', e => { if (trabajando) { e.preventDefault(); e.returnValue = ''; } });

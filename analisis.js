@@ -57,9 +57,9 @@ function describirEquipos(partido) {
 - "rival": ${partido.rival.nombre || 'el rival'}, con camiseta ${partido.rival.color || '(color no indicado)'}.${plantilla}`;
 }
 
-function promptTramo(partido, inicio, fin) {
+function promptTramo(partido, inicio, fin, parte) {
   return `Eres un estadístico profesional de baloncesto. Estás viendo un tramo de la grabación de un partido completo.
-Este tramo va del minuto ${formatoTiempo(inicio)} al ${formatoTiempo(fin)} del vídeo completo.
+${parte ? `El partido está grabado en varios archivos y este es la ${parte}. Cuando se habla del "vídeo completo" se refiere a ESTE archivo.\n` : ''}Este tramo va del minuto ${formatoTiempo(inicio)} al ${formatoTiempo(fin)} del vídeo completo.
 
 Equipos:
 ${describirEquipos(partido)}
@@ -113,35 +113,38 @@ export function crearTramos(duracion, minutos) {
 let siguienteId = 1;
 export const nuevoId = () => `e${Date.now().toString(36)}${(siguienteId++).toString(36)}`;
 
-export async function analizarTramo(ajustes, partido, archivo, tramo) {
+// tramo.inicio y tramo.fin son tiempos del partido entero; offset es dónde empieza este vídeo
+// dentro del partido (0 si el partido está en un solo vídeo).
+export async function analizarTramo(ajustes, partido, archivo, tramo, offset = 0, parte = '') {
+  const inicio = tramo.inicio - offset, fin = tramo.fin - offset;
   const partes = [
     {
       fileData: { mimeType: archivo.mimeType || 'video/mp4', fileUri: archivo.uri },
       videoMetadata: {
-        startOffset: `${Math.floor(tramo.inicio)}s`,
-        endOffset: `${Math.ceil(tramo.fin)}s`,
+        startOffset: `${Math.floor(inicio)}s`,
+        endOffset: `${Math.ceil(fin)}s`,
         ...(ajustes.fps && ajustes.fps !== 1 ? { fps: ajustes.fps } : {}),
       },
     },
-    { text: promptTramo(partido, tramo.inicio, tramo.fin) },
+    { text: promptTramo(partido, inicio, fin, parte) },
   ];
   const r = await generar(ajustes.clave, ajustes.modelo, partes, ESQUEMA_TRAMO, { resolucion: ajustes.resolucion });
 
   const eventos = r.eventos || [];
   const momentos = r.momentos || [];
-  const tEv = tiempoAbsoluto(eventos.map(e => aSegundos(e.tiempo)), tramo.inicio, tramo.fin);
-  const tMo = tiempoAbsoluto(momentos.map(m => aSegundos(m.tiempo)), tramo.inicio, tramo.fin);
+  const tEv = tiempoAbsoluto(eventos.map(e => aSegundos(e.tiempo)), inicio, fin);
+  const tMo = tiempoAbsoluto(momentos.map(m => aSegundos(m.tiempo)), inicio, fin);
   return {
     eventos: eventos.map((e, i) => ({
       id: nuevoId(),
-      t: tEv[i] ?? tramo.inicio,
+      t: (tEv[i] ?? inicio) + offset,
       equipo: e.equipo === 'rival' ? 'rival' : 'nuestro',
       dorsal: e.dorsal ? String(e.dorsal).replace(/[^0-9]/g, '') || null : null,
       tipo: e.tipo,
       descripcion: e.descripcion || '',
       confianza: e.confianza || 'media',
     })).filter(e => TIPOS[e.tipo]),
-    momentos: momentos.map((m, i) => ({ id: nuevoId(), t: tMo[i] ?? tramo.inicio, descripcion: m.descripcion })),
+    momentos: momentos.map((m, i) => ({ id: nuevoId(), t: (tMo[i] ?? inicio) + offset, descripcion: m.descripcion })),
     resumen: r.resumen_tramo || '',
     marcador: r.marcador_visible || null,
   };
