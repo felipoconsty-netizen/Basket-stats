@@ -2,28 +2,47 @@
 const BASE = 'https://generativelanguage.googleapis.com';
 const TROZO = 16 * 1024 * 1024; // la subida se hace en trozos de 16 MB
 
+const LIMITE_RESPUESTA = 6 * 60 * 1000; // un tramo normal tarda 1-3 minutos; más de 6 es que se ha colgado
+
 const esperar = ms => new Promise(r => setTimeout(r, ms));
 
-async function pedir(url, opciones, intentos = 4) {
+// limite: milisegundos que se espera cada intento antes de darlo por colgado y reintentar.
+// onEstado recibe un texto para enseñar al usuario qué está pasando mientras se reintenta.
+async function pedir(url, opciones, intentos = 4, { limite = 0, onEstado } = {}) {
   for (let i = 0; ; i++) {
     let res;
+    const control = new AbortController();
+    const reloj = limite ? setTimeout(() => control.abort(), limite) : null;
     try {
-      res = await fetch(url, opciones);
+      res = await fetch(url, { ...opciones, signal: control.signal });
     } catch (err) {
-      if (i >= intentos) throw new Error('Sin conexión con Google: ' + err.message);
+      const colgado = control.signal.aborted;
+      if (i >= intentos) {
+        throw new Error(colgado
+          ? 'Google no ha respondido después de varios intentos. Prueba otro modelo en Ajustes o tramos más cortos.'
+          : 'Sin conexión con Google: ' + err.message);
+      }
+      onEstado?.(colgado ? `Google no responde, reintento (${i + 1} de ${intentos})...` : `Sin conexión, reintento (${i + 1} de ${intentos})...`);
       await esperar(2000 * 2 ** i);
       continue;
+    } finally {
+      clearTimeout(reloj);
     }
     if (res.ok) return res;
     // 429 = demasiadas peticiones seguidas, 5xx = error temporal de Google
     if ((res.status === 429 || res.status >= 500) && i < intentos) {
-      await esperar(res.status === 429 ? 30000 * (i + 1) : 3000 * 2 ** i);
+      const espera = res.status === 429 ? 30000 * (i + 1) : 3000 * 2 ** i;
+      onEstado?.(res.status === 429
+        ? `Google pide ir más despacio (límite de la clave gratuita). Espero ${espera / 1000} s y sigo...`
+        : `Google ha dado un error temporal, reintento (${i + 1} de ${intentos})...`);
+      await esperar(espera);
       continue;
     }
     let detalle = '';
     try { detalle = (await res.json()).error?.message || ''; } catch {}
     if (res.status === 400 && /API key/i.test(detalle)) throw new Error('La clave de Gemini no es válida. Revísala en Ajustes.');
     if (res.status === 403) throw new Error('La clave de Gemini no tiene permiso: ' + detalle);
+    if (res.status === 429) throw new Error('Se ha acabado el uso gratuito de Gemini por hoy o por este minuto. Espera un rato (o hasta mañana) y pulsa "Reintentar / continuar".');
     throw new Error(`Error de Gemini (${res.status}): ${detalle}`);
   }
 }
@@ -113,7 +132,7 @@ export async function generar(clave, modelo, partes, esquema, opciones = {}) {
     method: 'POST',
     headers: { 'x-goog-api-key': clave, 'Content-Type': 'application/json' },
     body: JSON.stringify({ contents: [{ role: 'user', parts: partes }], generationConfig }),
-  });
+  }, 3, { limite: LIMITE_RESPUESTA, onEstado: opciones.onEstado });
   const datos = await res.json();
   const texto = datos.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
   if (!texto) {

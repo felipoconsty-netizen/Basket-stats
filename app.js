@@ -332,10 +332,17 @@ async function continuar() {
       }
       tramo.estado = 'analizando';
       const num = tramos.indexOf(tramo) + 1;
-      pintarProgreso(`Analizando tramo ${num} de ${tramos.length} (${formatoTiempo(tramo.inicio)}–${formatoTiempo(tramo.fin)})...`);
+      const base = `Analizando tramo ${num} de ${tramos.length} (${formatoTiempo(tramo.inicio)}–${formatoTiempo(tramo.fin)})`;
+      // Cada tramo tarda un par de minutos: enseñamos el tiempo que lleva para que se vea que sigue vivo.
+      const empezo = Date.now();
+      let nota = 'normalmente tarda 1-3 minutos';
+      const pintarTramo = () => pintarProgreso(`${base}... lleva ${formatoTiempo((Date.now() - empezo) / 1000)} (${nota})`);
+      pintarTramo();
+      const cronometro = setInterval(pintarTramo, 1000);
       try {
         const video = analisis.videos[tramo.video];
-        const r = await analizarTramo(ajustes, analisis.partido, video.archivo, tramo, video.offset, textoParte(tramo.video));
+        const r = await analizarTramo(ajustes, analisis.partido, video.archivo, tramo, video.offset, textoParte(tramo.video),
+          texto => { nota = texto; pintarTramo(); });
         analisis.eventos = analisis.eventos.filter(e => e.tramo !== tramo.inicio)
           .concat(r.eventos.map(e => ({ ...e, tramo: tramo.inicio })));
         analisis.momentos = analisis.momentos.filter(m => m.tramo !== tramo.inicio)
@@ -345,6 +352,8 @@ async function continuar() {
         Object.assign(tramo, { estado: 'error', error: err.message });
         guardarAnalisis();
         throw err;
+      } finally {
+        clearInterval(cronometro);
       }
       guardarAnalisis();
     }

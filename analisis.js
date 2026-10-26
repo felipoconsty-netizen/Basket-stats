@@ -115,7 +115,7 @@ export const nuevoId = () => `e${Date.now().toString(36)}${(siguienteId++).toStr
 
 // tramo.inicio y tramo.fin son tiempos del partido entero; offset es dónde empieza este vídeo
 // dentro del partido (0 si el partido está en un solo vídeo).
-export async function analizarTramo(ajustes, partido, archivo, tramo, offset = 0, parte = '') {
+export async function analizarTramo(ajustes, partido, archivo, tramo, offset = 0, parte = '', onEstado) {
   const inicio = tramo.inicio - offset, fin = tramo.fin - offset;
   const partes = [
     {
@@ -128,7 +128,7 @@ export async function analizarTramo(ajustes, partido, archivo, tramo, offset = 0
     },
     { text: promptTramo(partido, inicio, fin, parte) },
   ];
-  const r = await generar(ajustes.clave, ajustes.modelo, partes, ESQUEMA_TRAMO, { resolucion: ajustes.resolucion });
+  const r = await generar(ajustes.clave, ajustes.modelo, partes, ESQUEMA_TRAMO, { resolucion: ajustes.resolucion, onEstado });
 
   const eventos = r.eventos || [];
   const momentos = r.momentos || [];
