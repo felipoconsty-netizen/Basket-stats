@@ -31,8 +31,9 @@
         <h2>Vídeo del partido</h2>
         <label class="soltar" id="zona-video">
           <input type="file" id="archivo-video" accept="video/*" multiple>
-          <span id="texto-video">Toca aquí para elegir el vídeo (MP4, MOV...).<br>Si el partido está en varias partes, elígelas todas a la vez.</span>
+          <span id="texto-video">Toca aquí para elegir el vídeo (MP4, MOV...).<br>Si el partido está en varias partes, añádelas todas (de golpe o de una en una).</span>
         </label>
+        <div class="acciones"><button id="btn-quitar-videos" class="secundario" hidden>Quitar los vídeos y empezar de nuevo</button></div>
         <video id="previa" controls playsinline hidden></video>
       </div>
 

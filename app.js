@@ -126,9 +126,11 @@ function leerPartido() {
   };
 }
 
-// Si el partido está en varios vídeos, se ordenan por el nombre del archivo (parte1, parte2...).
+// Si el partido está en varios vídeos, se pueden elegir de golpe o de uno en uno, y se ordenan
+// por el nombre del archivo (parte1, parte2... o la fecha que pone el móvil).
 function ponerVideos(archivos) {
   videosLocales = [...archivos].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  if (!videosLocales.length) return quitarVideos();
   urlsVideo.forEach(u => URL.revokeObjectURL(u));
   urlsVideo = videosLocales.map(f => URL.createObjectURL(f));
   videoActual = -1;
@@ -143,9 +145,30 @@ function ponerVideos(archivos) {
     ? `✅ ${esc(videosLocales[0].name)} (${mb(videosLocales[0])} MB) — toca para cambiarlo`
     : `✅ Partido en ${videosLocales.length} partes, en este orden:<br>` +
       videosLocales.map((f, i) => `${i + 1}. ${esc(f.name)} (${mb(f)} MB)`).join('<br>') +
-      '<br><small>Se ordenan por el nombre del archivo. Toca para cambiarlos.</small>';
+      '<br><small>Se ordenan por el nombre del archivo.</small>';
+  if (videosLocales.length === 1) $('#texto-video').innerHTML += '<br><small>Si el partido tiene más partes, toca otra vez para añadirlas.</small>';
+  else $('#texto-video').innerHTML += '<br><small>Toca otra vez para añadir otra parte.</small>';
+  $('#btn-quitar-videos').hidden = false;
 }
-$('#archivo-video').addEventListener('change', e => { if (e.target.files.length) ponerVideos(e.target.files); });
+
+function quitarVideos() {
+  videosLocales = [];
+  urlsVideo.forEach(u => URL.revokeObjectURL(u));
+  urlsVideo = [];
+  videoActual = -1;
+  for (const id of ['#previa', '#reproductor']) { $(id).removeAttribute('src'); $(id).hidden = true; }
+  $('#zona-video').classList.remove('con-video');
+  $('#texto-video').innerHTML = 'Toca aquí para elegir el vídeo (MP4, MOV...).<br>Si el partido está en varias partes, añádelas todas (de golpe o de una en una).';
+  $('#btn-quitar-videos').hidden = true;
+}
+
+// Cada vez que se eligen vídeos se añaden a los que ya había (sin repetir el mismo archivo).
+$('#archivo-video').addEventListener('change', e => {
+  const nuevos = [...e.target.files].filter(f => !videosLocales.some(v => v.name === f.name && v.size === f.size));
+  if (nuevos.length) ponerVideos([...videosLocales, ...nuevos]);
+  e.target.value = '';
+});
+$('#btn-quitar-videos').addEventListener('click', quitarVideos);
 
 function cargarEnReproductor(i) {
   if (i === videoActual || !urlsVideo[i]) return;
