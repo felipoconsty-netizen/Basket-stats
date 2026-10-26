@@ -16,7 +16,7 @@ La inteligencia artificial de Google (Gemini) ve el partido y apunta cada jugada
 ## Cómo se usa
 
 1. **Ajustes**: pega tu clave de Gemini. Se consigue gratis en <https://aistudio.google.com/apikey>.
-2. **Partido**: elige el vídeo, escribe los nombres y el color de camiseta de los dos equipos y, si quieres, la lista de jugadores (`dorsal - nombre`).
+2. **Partido**: elige el vídeo (si el partido está grabado en varias partes, elígelas todas a la vez: se ordenan por el nombre del archivo y se analizan como un solo partido), escribe los nombres y el color de camiseta de los dos equipos y, si quieres, la lista de jugadores (`dorsal - nombre`).
 3. Pulsa **Analizar partido**. El vídeo se sube a Google y se analiza por tramos de 5 minutos. Un partido entero tarda unos 15–30 minutos.
 4. **Revisar jugadas**: corrige lo que esté mal. Las jugadas dudosas salen en amarillo.
 5. **Informe**: ya está todo. Si has corregido mucho, pulsa "Rehacer resumen".

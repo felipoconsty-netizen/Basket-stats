@@ -30,8 +30,8 @@
       <div class="tarjeta">
         <h2>Vídeo del partido</h2>
         <label class="soltar" id="zona-video">
-          <input type="file" id="archivo-video" accept="video/*">
-          <span id="texto-video">Toca aquí para elegir el vídeo (MP4, MOV...)</span>
+          <input type="file" id="archivo-video" accept="video/*" multiple>
+          <span id="texto-video">Toca aquí para elegir el vídeo (MP4, MOV...).<br>Si el partido está en varias partes, elígelas todas a la vez.</span>
         </label>
         <video id="previa" controls playsinline hidden></video>
       </div>
@@ -78,7 +78,7 @@
           <button id="btn-continuar" class="principal" hidden>Reintentar / continuar</button>
           <button id="btn-cancelar" class="secundario" hidden>Pausar</button>
         </div>
-        <p class="ayuda">Puedes dejar esta pestaña abierta y hacer otras cosas. Si se cierra, al volver podrás continuar donde lo dejaste (eligiendo otra vez el mismo vídeo).</p>
+        <p class="ayuda">Puedes dejar esta pestaña abierta y hacer otras cosas. Si se cierra, al volver podrás continuar donde lo dejaste (eligiendo otra vez los mismos vídeos).</p>
       </div>
     </section>
 
