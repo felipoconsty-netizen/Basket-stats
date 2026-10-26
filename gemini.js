@@ -6,9 +6,24 @@ const LIMITE_RESPUESTA = 6 * 60 * 1000; // un tramo normal tarda 1-3 minutos; m�
 
 const esperar = ms => new Promise(r => setTimeout(r, ms));
 
+// Google explica en el error 429 qué límite se ha pasado (por minuto o por día) y cuánto esperar.
+async function leerCuota(res) {
+  let error = {};
+  try { error = (await res.json()).error || {}; } catch {}
+  const detalles = error.details || [];
+  const ids = detalles.flatMap(d => d.violations || []).map(v => v.quotaId || '').join(' ');
+  const retraso = detalles.find(d => d.retryDelay)?.retryDelay;
+  return { porDia: /PerDay/i.test(ids), espera: retraso ? parseFloat(retraso) * 1000 : 0, ids };
+}
+
+const MENSAJE_DIA = 'Se ha acabado el uso gratuito de hoy para este modelo. Lo analizado queda guardado. ' +
+  'Puedes: elegir otro modelo en Ajustes (cada uno tiene su propio límite) y pulsar "Reintentar / continuar"; ' +
+  'esperar a mañana; o activar la facturación en Google AI Studio (un partido suele costar menos de 1 €).';
+
 // limite: milisegundos que se espera cada intento antes de darlo por colgado y reintentar.
 // onEstado recibe un texto para enseñar al usuario qué está pasando mientras se reintenta.
 async function pedir(url, opciones, intentos = 4, { limite = 0, onEstado } = {}) {
+  let esperas429 = 0;
   for (let i = 0; ; i++) {
     let res;
     const control = new AbortController();
@@ -29,20 +44,31 @@ async function pedir(url, opciones, intentos = 4, { limite = 0, onEstado } = {})
       clearTimeout(reloj);
     }
     if (res.ok) return res;
-    // 429 = demasiadas peticiones seguidas, 5xx = error temporal de Google
-    if ((res.status === 429 || res.status >= 500) && i < intentos) {
-      const espera = res.status === 429 ? 30000 * (i + 1) : 3000 * 2 ** i;
-      onEstado?.(res.status === 429
-        ? `Google pide ir más despacio (límite de la clave gratuita). Espero ${espera / 1000} s y sigo...`
-        : `Google ha dado un error temporal, reintento (${i + 1} de ${intentos})...`);
-      await esperar(espera);
+    // 429 = límite de uso. Si es el de cada minuto, se espera lo que diga Google y se sigue solo;
+    // si es el del día, no sirve de nada esperar.
+    if (res.status === 429) {
+      const cuota = await leerCuota(res);
+      if (cuota.porDia) throw new Error(MENSAJE_DIA);
+      if (esperas429 < 30) {
+        esperas429++;
+        i--;
+        const espera = Math.max(cuota.espera, 20000) + 5000;
+        onEstado?.(`Google pide ir más despacio (límite por minuto de la clave gratuita). Espero ${Math.round(espera / 1000)} s y sigo solo...`);
+        await esperar(espera);
+        continue;
+      }
+      throw new Error('Google sigue limitando el uso de la clave gratuita' + (cuota.ids ? ` (${cuota.ids})` : '') + '. Espera un rato y pulsa "Reintentar / continuar".');
+    }
+    // 5xx = error temporal de Google
+    if (res.status >= 500 && i < intentos) {
+      onEstado?.(`Google ha dado un error temporal, reintento (${i + 1} de ${intentos})...`);
+      await esperar(3000 * 2 ** i);
       continue;
     }
     let detalle = '';
     try { detalle = (await res.json()).error?.message || ''; } catch {}
     if (res.status === 400 && /API key/i.test(detalle)) throw new Error('La clave de Gemini no es válida. Revísala en Ajustes.');
     if (res.status === 403) throw new Error('La clave de Gemini no tiene permiso: ' + detalle);
-    if (res.status === 429) throw new Error('Se ha acabado el uso gratuito de Gemini por hoy o por este minuto. Espera un rato (o hasta mañana) y pulsa "Reintentar / continuar".');
     throw new Error(`Error de Gemini (${res.status}): ${detalle}`);
   }
 }
