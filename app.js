@@ -32,6 +32,7 @@ let analisis = adaptar(cargar('basket-analisis', null));
 let videosLocales = []; // los archivos de vídeo elegidos, en orden (no se pueden guardar en el navegador)
 let urlsVideo = [];
 let videoActual = -1; // qué parte está cargada en el reproductor
+const LIMITE_GOOGLE = 2 * 1024 ** 3; // Google no acepta archivos de más de 2 GB
 let parar = false;
 let trabajando = false;
 
@@ -206,6 +207,11 @@ $('#btn-analizar').addEventListener('click', async () => {
   if (trabajando) { irA('analizar'); return; }
   if (!ajustes.clave) { avisar('Primero pon tu clave de Gemini en Ajustes.', true); irA('ajustes'); return; }
   if (!videosLocales.length) { avisar('Elige el vídeo del partido.', true); return; }
+  const grande = videosLocales.find(f => f.size > LIMITE_GOOGLE);
+  if (grande) {
+    avisar(`"${grande.name}" pesa más de 2 GB, el máximo que acepta Google. Usa el partido en varias partes más pequeñas.`, true);
+    return;
+  }
   const partido = leerPartido();
   if (!partido.nuestro.color || !partido.rival.color) { avisar('Indica el color de camiseta de los dos equipos.', true); return; }
 
